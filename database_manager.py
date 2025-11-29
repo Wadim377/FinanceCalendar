@@ -223,18 +223,18 @@ class DatabaseManager:
         return (current_date.year() - start_date.year()) * 12 + current_date.month() - start_date.month() + 1
 
     def get_remaining_contract_amount(self) -> float:
-        # Возвращает оставшуюся сумму по договору (задолженность) с учетом начисленных процентов
+        """Возвращает оставшуюся сумму по договору (задолженность) БЕЗ учета процентов"""
         contract_settings = self.get_contract_settings()
         
-        # Общий баланс = Основной долг + Накопленные проценты
-        current_balance = self._get_total_balance_on_date(QDate.currentDate())
+        # Общая сумма договора
+        total_contract_amount = contract_settings['contract_amount']
         
         # Общая сумма фактических пополнений (внесенных средств)
         daily_data = self.get_all_daily_data()
         total_fact = sum(daily_data.values())
         
-        # Оставшаяся сумма (Задолженность) = (Основной долг + Проценты) - Внесенные средства
-        remaining = max(0, current_balance - total_fact)
+        # Оставшаяся сумма (Задолженность) = Общая сумма договора - Внесенные средства
+        remaining = max(0, total_contract_amount - total_fact)
         return remaining
 
     def get_adjusted_monthly_plan(self, year: int, month: int) -> float:
@@ -253,13 +253,12 @@ class DatabaseManager:
             return monthly_plans.get(month_key, 0.0)
 
     def calculate_monthly_interest(self, year: int, month: int) -> float:
-        # Рассчитывает проценты за месяц с учетом ЕЖЕДНЕВНОЙ КАПИТАЛИЗАЦИИ.
-        # Выполняется симуляция накопления с даты начала договора.
+        """Рассчитывает проценты за месяц с учетом ЕЖЕДНЕВНОЙ КАПИТАЛИЗАЦИИ на ВНЕСЕННЫЕ средства."""
         contract_settings = self.get_contract_settings()
         start_date = contract_settings['start_date']
         contract_day = start_date.day()
         current_date_real = QDate.currentDate()
-
+    
         # Определяем дату начисления процентов (например, 15-е число месяца)
         try:
             accrual_date = QDate(year, month, contract_day)
@@ -269,10 +268,10 @@ class DatabaseManager:
         except:
             last_day = QDate(year, month, 1).daysInMonth()
             accrual_date = QDate(year, month, last_day)
-
+    
         if accrual_date <= start_date:
             return 0.0
-
+    
         # Период начисления: с (Дата начисления - 1 месяц) по (Дата начисления - 1 день)
         target_period_start = accrual_date.addMonths(-1)
         if target_period_start < start_date:
@@ -282,11 +281,11 @@ class DatabaseManager:
         
         if target_period_start >= simulation_end_date:
             return 0.0
-
+    
         all_payments = self.get_all_daily_data()
         
-        # current_balance = Основной долг + Накопленные проценты
-        current_balance = contract_settings['contract_amount']
+        # НАЧИНАЕМ С НУЛЕВОГО БАЛАНСА - проценты начисляются только на внесенные средства
+        current_balance = 0.0
         interest_for_target_period = 0.0
         
         # Симуляция с ПЕРВОГО дня договора
@@ -295,7 +294,7 @@ class DatabaseManager:
         while iter_date < simulation_end_date:
             day_str = iter_date.toString('yyyy-MM-dd')
             
-            # А) Начисляем проценты на баланс на начало дня (КАПИТАЛИЗАЦИЯ)
+            # А) Начисляем проценты на накопленный баланс на начало дня (КАПИТАЛИЗАЦИЯ)
             if current_balance > 0:
                 rate = self.get_effective_rate_on_date(iter_date, contract_settings)
                 days_in_year = iter_date.daysInYear()
@@ -309,39 +308,39 @@ class DatabaseManager:
                 if iter_date >= target_period_start:
                     interest_for_target_period += daily_interest
             
-            # Б) Учитываем пополнение: пополнение приносит проценты со следующего дня
+            # Б) Учитываем пополнение: добавляем внесенные средства к балансу
             if day_str in all_payments:
-                current_balance -= all_payments[day_str] # В этой логике баланс — это ДОЛГ, поэтому вычитаем пополнение
+                current_balance += all_payments[day_str]  # ДОБАВЛЯЕМ пополнение к балансу
             
             iter_date = iter_date.addDays(1)
-
+    
         return interest_for_target_period
 
     def _get_total_balance_on_date(self, date: QDate) -> float:
-        # Возвращает общий баланс (Основной долг + накопленные проценты) на указанную дату
+        """Возвращает общий баланс (Внесенные средства + накопленные проценты) на указанную дату"""
         contract_settings = self.get_contract_settings()
         start_date = contract_settings['start_date']
         
         if date < start_date:
-            return contract_settings['contract_amount']
+            return 0.0  # До начала договора баланс нулевой
         
-        # Начинаем с основного долга по договору
-        current_balance = contract_settings['contract_amount']
+        # Начинаем с нулевого баланса
+        current_balance = 0.0
         current_date = start_date
         daily_data = self.get_all_daily_data()
         
-        # Симуляция накопления процентов и вычета платежей
+        # Симуляция накопления процентов и добавления платежей
         while current_date <= date:
-            daily_rate = self.get_effective_rate_on_date(current_date, contract_settings) / 365.0
+            # Начисление процентов на существующий баланс
+            if current_balance > 0:
+                daily_rate = self.get_effective_rate_on_date(current_date, contract_settings) / 365.0
+                interest_today = current_balance * daily_rate / 100
+                current_balance += interest_today
             
-            # Начисление процентов (на непогашенный остаток)
-            interest_today = current_balance * daily_rate / 100
-            current_balance += interest_today
-            
-            # Учет платежей в этот день (уменьшение долга)
+            # Учет платежей в этот день (увеличение баланса)
             day_key = current_date.toString('yyyy-MM-dd')
             if day_key in daily_data and daily_data[day_key] > 0:
-                current_balance -= daily_data[day_key]
+                current_balance += daily_data[day_key]
             
             current_date = current_date.addDays(1)
         
