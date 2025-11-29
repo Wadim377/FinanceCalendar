@@ -161,7 +161,7 @@ class DatabaseManager:
 
     # Методы для расчета помесячного плана
     def calculate_monthly_plans(self) -> dict:
-        # Рассчитывает план погашения основного долга по месяцам, равномерно распределяя общую сумму
+        """Рассчитывает план погашения основного долга по месяцам, включая месяц заключения, но исключая месяц закрытия"""
         contract_settings = self.get_contract_settings()
         start_date = contract_settings['start_date']
         end_date = contract_settings['end_date']
@@ -170,8 +170,8 @@ class DatabaseManager:
         if total_amount == 0:
             return {}
         
-        # Считаем количество месяцев для равномерного распределения, исключая месяц закрытия
-        months_count = self._get_months_between_dates_excluding_end(start_date, end_date)
+        # Считаем количество месяцев для равномерного распределения, ВКЛЮЧАЯ месяц заключения, ИСКЛЮЧАЯ месяц закрытия
+        months_count = self._get_months_between_dates_including_start_excluding_end(start_date, end_date)
         
         if months_count == 0:
             return {}
@@ -182,10 +182,18 @@ class DatabaseManager:
         monthly_plans = {}
         cumulative_fact = 0.0
         
-        # Итерация по месяцам договора (до месяца закрытия)
+        # Итерация по месяцам договора (включая месяц заключения, исключая месяц закрытия)
         current_date = QDate(start_date.year(), start_date.month(), 1)
+        month_index = 0
+        
         while current_date < end_date:
+            # Проверяем, что это не месяц закрытия
+            if current_date.year() == end_date.year() and current_date.month() == end_date.month():
+                current_date = current_date.addMonths(1)
+                continue
+                
             month_key = current_date.toString('yyyy-MM')
+            month_index += 1
             
             # Суммируем фактические пополнения за текущий месяц
             monthly_fact = 0.0
@@ -195,14 +203,12 @@ class DatabaseManager:
             
             cumulative_fact += monthly_fact
             
-            # Расчет скорректированного плана: учитываем, чтобы общая сумма факта
-            # не превышала кумулятивную сумму базовых планов.
-            # Это логика "досрочного погашения": если факт опережает план, текущий план уменьшается.
-            target_cumulative_plan = base_monthly_amount * self._get_month_index(current_date, start_date)
+            # Расчет скорректированного плана
+            target_cumulative_plan = base_monthly_amount * month_index
             
             if cumulative_fact > target_cumulative_plan:
-                # Если переплата, уменьшаем план текущего месяца, чтобы не создавать "дефицит" плана
-                previous_cumulative_plan = base_monthly_amount * (self._get_month_index(current_date, start_date) - 1)
+                # Если переплата, уменьшаем план текущего месяца
+                previous_cumulative_plan = base_monthly_amount * (month_index - 1)
                 adjusted_plan = max(0, base_monthly_amount - (cumulative_fact - target_cumulative_plan))
             else:
                 adjusted_plan = base_monthly_amount
@@ -212,6 +218,11 @@ class DatabaseManager:
             current_date = current_date.addMonths(1)
         
         return monthly_plans
+
+    def _get_months_between_dates_including_start_excluding_end(self, start_date: QDate, end_date: QDate) -> int:
+        """Вспомогательный: Вычисляет количество месяцев ВКЛЮЧАЯ месяц начала, ИСКЛЮЧАЯ месяц конца"""
+        total_months = (end_date.year() - start_date.year()) * 12 + end_date.month() - start_date.month()
+        return max(1, total_months)  # Минимум 1 месяц
 
     def _get_months_between_dates_excluding_end(self, start_date: QDate, end_date: QDate) -> int:
         # Вспомогательный: Вычисляет количество месяцев для равномерного распределения
