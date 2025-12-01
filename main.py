@@ -676,15 +676,15 @@ class FinanceCalendar(QMainWindow):
             
             # Стилизация: зеленый - внесена сумма, бирюзовый - текущий день, темно-серый - остальные
             if amount > 0:
-                style = "background-color: #388e3c; border: 1px solid #81c784; border-radius: 4px;"
+                style = "background-color: #388e3c; border-radius: 4px;"
                 day_label.setStyleSheet("color: white; font-weight: bold;")
                 amount_label.setStyleSheet("color: white; font-size: 9px; font-weight: bold;")
             elif date == QDate.currentDate():
-                style = "background-color: #4db6ac; border: 1px solid #80cbc4; border-radius: 4px;"
+                style = "background-color: #4db6ac; border-radius: 4px;"
                 day_label.setStyleSheet("color: white; font-weight: bold;")
                 amount_label.setStyleSheet("color: white; font-size: 9px;")
             else:
-                style = "background-color: #455a64; border: 1px solid #546e7a; border-radius: 3px;"
+                style = "background-color: #455a64; border-radius: 3px;"
                 day_label.setStyleSheet("color: #e0e0e0; font-weight: bold;") 
                 amount_label.setStyleSheet("color: #80cbc4; font-size: 9px;")
             
@@ -833,15 +833,15 @@ class FinanceCalendar(QMainWindow):
                 
                 # Обновление стилей
                 if amount > 0:
-                    style = "background-color: #388e3c; border: 1px solid #81c784; border-radius: 4px;"
+                    style = style = "background-color: #388e3c; border-radius: 4px;"
                     label_style = "color: white; font-size: 9px; font-weight: bold;"
                     day_style = "color: white; font-weight: bold;"
                 elif date == QDate.currentDate():
-                    style = "background-color: #4db6ac; border: 1px solid #80cbc4; border-radius: 4px;"
+                    style = style = "background-color: #4db6ac; border-radius: 4px;"
                     label_style = "color: white; font-size: 9px;"
                     day_style = "color: white; font-weight: bold;"
                 else:
-                    style = "background-color: #455a64; border: 1px solid #546e7a; border-radius: 3px;"
+                    style = style = "background-color: #455a64; border-radius: 3px;"
                     label_style = "color: #80cbc4; font-size: 9px;"
                     day_style = "font-weight: bold; color: #e0e0e0;" 
                 
